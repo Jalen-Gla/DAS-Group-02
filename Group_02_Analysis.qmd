@@ -14,3 +14,18 @@ output:
   pdf_document:
     fig_caption: yes
 ---
+
+```{r}
+library(jsonlite)
+library(nycflights13)
+library(gridExtra)
+library(GGally)
+library(dplyr)
+library(tidyr)
+library(knitr)
+library(sjmisc)
+library(sjPlot)
+library(janitor)
+library(ggplot2)
+library(readr)
+```
