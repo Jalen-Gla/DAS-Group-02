@@ -1,9 +1,9 @@
 ---
-title: "Data Wrangling and Visualisation"
-author: "Group 01"
+title: "Group_02_Analysis"
+author: "Group 02"
 format:
   pdf:
-    output-file: "Group_01_qmd"
+    output-file: "Group_02_Analysis"
     output-ext: "pdf"
 execute:
   echo: false
