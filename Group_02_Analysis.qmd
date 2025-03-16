@@ -24,6 +24,8 @@ library(janitor)
 library(ggplot2)
 library(readr)
 library(corrplot)
+library(MASS)
+library(car)
 ```
 
 # Data
@@ -98,6 +100,17 @@ ggplot(Data, aes(x = Type.of.Household, fill = Type.of.Household)) +
   labs(title = "Count of Household Types", x = "Household Type", y = "Count") +
   theme(legend.position = "none")
 
+# Box plot of the relationship between 'Type.of.Household' and 'Total.Number.of.Family.members'
+ggplot(Data, aes(x = Type.of.Household, y = Total.Number.of.Family.members)) +
+  geom_boxplot() +
+  labs(title = "Household Type vs. Family members")
+
+# check the relationship between independent variable with dependent variable（Household.Head.Age vs. Total.Number.of.Family.members）
+ggplot(Data, aes(x = Household.Head.Age, y = Total.Number.of.Family.members)) +
+  geom_point() +
+  geom_smooth(method = "loess") +
+  labs(title = "Age of Household Head vs. Family members")
+
 # Histogram of Total.Number.of.Family.members
 ggplot(Data, aes(x = Total.Number.of.Family.members)) +
   geom_histogram(aes(y = ..density..), bins = 30, fill = "pink", color = "black", alpha = 0.7) +
@@ -115,20 +128,56 @@ Data$Total.Number.of.Family.members <- as.numeric(Data$Total.Number.of.Family.me
 Data$Type.of.Household <- as.factor(Data$Type.of.Household)
 ```
 
-# Modeling with GLM
+# Modeling with GLM Poisson regression
 
 ```{r}
-# Perform Poisson regression using GLM modeling.
-glm_model <- glm(Total.Number.of.Family.members ~ Total.Food.Expenditure + Household.Head.Age + Type.of.Household, 
+# Perform Poisson regression using GLM 
+possion_model <- glm(Total.Number.of.Family.members ~ Total.Food.Expenditure + Household.Head.Age + Type.of.Household, 
                  data = Data, 
                  family = poisson())
-summary(glm_model)
+summary(possion_model)
+
 ```
 
+```{r}
+# Modeling with GLM Negative binomial regression
+nb_model <- glm.nb(Total.Number.of.Family.members ~ 
+                    Total.Food.Expenditure + 
+                    Household.Head.Age + 
+                    Type.of.Household,
+                  data = Data)
+summary(nb_model)
+```
+
+```{r}
+#Perform Gamma regression using GLM modeling.
+# check if the dependent all over 0
+summary(Data$Total.Number.of.Family.members)
+
+gamma_model <- glm(Total.Number.of.Family.members ~ Total.Food.Expenditure + Type.of.Household + Household.Head.Age,
+                   data = Data,
+                   family = Gamma(link = "log"))
+
+summary(gamma_model)
+
+```
 # GLM Regression Analysis Results
 
 ```{r}
+# Compare the AIC of Poisson and negative binomial models and gamma models
+AIC(poisson_model, nb_model, gamma_model)
 
+# Coefficient to explain negative binomial regression (incidence ratio IRR)
+exp(coef(nb_model))
+
+#check Overdispersion
+cat("Overdispersion =", poisson_model$deviance / poisson_model$df.residual)
+
+plot(poisson_model, which = 1)  # Residual vs fit value
+qqnorm(resid(poisson_model))    # Normality test
+
+# Check collinearity (high collinearity results in unstable coefficients)
+vif(poisson_model) 
 ```
 
 # **Organize Visualizations (Regression Coefficient Bar Chart, Correlation Heatmap)**
