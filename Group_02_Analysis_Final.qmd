@@ -6,7 +6,7 @@ format:
     output-file: "Group_02_Analysis"
     output-ext: "pdf"
 execute:
-  echo: false
+  echo: true
   eval: true
   warning: false
   message: false
@@ -30,6 +30,8 @@ library(car)
 
 # Data
 
+In this project, we used a dataset to study the impact of other variables on Total.Number.of.Family.members. Next, we will use a series of methods to identify a few suitable variables to begin research and perform GLM fitting and evaluation. These variables include Total.Food.Expenditure, Household.Head.Sex, and Type.of.Household.
+
 ```{r}
 Data <- read.csv("dataset02.csv")
 Data <- Data %>% dplyr::select(-Region)#Elements are duplicated
@@ -37,6 +39,7 @@ Data <- Data %>% dplyr::select(-Region)#Elements are duplicated
 
 # Data Exploration
 
+In order to identify a few suitable research variables for easier study, we will use functions like cor, ANOVA, and others to select two appropriate numerical variables and one categorical variable.
 ```{r}
 # Ensure Electricity is treated as a categorical variable
 Data$Electricity <- as.factor(Data$Electricity)
@@ -80,7 +83,12 @@ Data <- Data %>%
 
 # Variable Distribution Visualization
 
+Next, we will perform visualization to better understand how to process the data in the following sections and which models to use for fitting. Through visualization, we can gain insights into the relationships between variables, detect potential outliers, and decide on the most suitable modeling approach.
 ```{r}
+#| label: fig-His_TFE
+#| fig-cap: Histogram of Total.Food.Expenditure
+#| fig-align: center
+#| fig.pos: H
 # Histogram of Total.Food.Expenditure
 ggplot(Data, aes(x = Total.Food.Expenditure)) +
   geom_histogram(aes(y = ..density..), bins = 30, fill = "lightblue", color = "black", alpha = 0.7) +
@@ -90,6 +98,10 @@ ggplot(Data, aes(x = Total.Food.Expenditure)) +
 The variable distribution of Total.Food.Expenditure is highly right-skewed (long right tail), meaning that most households have low food expenditures, but there are some extremely high values.
 
 ```{r}
+#| label: fig-His_HHA
+#| fig-cap: Histogram of Household.Head.Age
+#| fig-align: center
+#| fig.pos: H
 # Histogram of Household.Head.Age
 ggplot(Data, aes(x = Household.Head.Age)) +
   geom_histogram(aes(y = ..density..), bins = 30, fill = "lightgreen", color = "black", alpha = 0.7) +
@@ -99,6 +111,10 @@ ggplot(Data, aes(x = Household.Head.Age)) +
 The distribution of Household.Head.Age is approximately normal.The data is well-distributed and can be used directly.
 
 ```{r}
+#| label: fig-Bar_TOH
+#| fig-cap: Bar chart of Type.of.Household
+#| fig-align: center
+#| fig.pos: H
 # Bar chart of Type.of.Household
 ggplot(Data, aes(x = Type.of.Household, fill = Type.of.Household)) +
   geom_bar() +
@@ -108,6 +124,10 @@ ggplot(Data, aes(x = Type.of.Household, fill = Type.of.Household)) +
 We can easily observe that the "Two or More Nonrelated Persons/Members" category has very few samples, which may affect model stability in GLM fitting.
 
 ```{r}
+#| label: fig-Box_TOHVSTNOFM
+#| fig-cap: Box plot of Type.of.Household and Total.Number.of.Family.members
+#| fig-align: center
+#| fig.pos: H
 # Box plot of the relationship between 'Type.of.Household' and 'Total.Number.of.Family.members'
 ggplot(Data, aes(x = Type.of.Household, y = Total.Number.of.Family.members)) +
   geom_boxplot() +
@@ -116,6 +136,10 @@ ggplot(Data, aes(x = Type.of.Household, y = Total.Number.of.Family.members)) +
 From the above figure, we can see that Extended Family usually has the highest number of family members, Single Family has fewer, and households with nonrelated persons have the least. However, there are outliers present. In the subsequent data processing, we will consider using the IQR method to remove these outliers.
 
 ```{r}
+#| label: fig-His_HHAVsTNOFM
+#| fig-cap: Histogram of Household.Head.Age vs. Total.Number.of.Family.members
+#| fig-align: center
+#| fig.pos: H
 # check the relationship between independent variable with dependent variable（Household.Head.Age vs. Total.Number.of.Family.members）
 ggplot(Data, aes(x = Household.Head.Age, y = Total.Number.of.Family.members)) +
   geom_point() +
@@ -125,6 +149,10 @@ ggplot(Data, aes(x = Household.Head.Age, y = Total.Number.of.Family.members)) +
 The LOESS curve exhibits a nonlinear trend (first rising and then falling), whereas Poisson regression assumes a linear relationship. Therefore, we will consider polynomial regression in the subsequent model construction. Additionally, there are some outliers that we may consider removing.
 
 ```{r}
+#| label: fig-His_TNOFM
+#| fig-cap: Histogram of Total.Number.of.Family.members
+#| fig-align: center
+#| fig.pos: H
 # Histogram of Total.Number.of.Family.members
 ggplot(Data, aes(x = Total.Number.of.Family.members)) +
   geom_histogram(aes(y = ..density..), bins = 30, fill = "pink", color = "black", alpha = 0.7) +
@@ -157,7 +185,7 @@ ggplot(Data, aes(x = log_Total.Food.Expenditure)) +
 ```
 It is evident that the data follows a normal distribution more closely after applying the logarithm transformation, achieving our goal. Next, we will consider using this transformed data for model fitting.
 
-# Modeling with GLM Poisson regression
+# Modeling with GLM Poisson, Negative binomial and Gamma regression
 
 ```{r}
 # Perform Poisson regression using GLM 
