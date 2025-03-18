@@ -146,7 +146,7 @@ We found that the data is right-skewed and contains a few high-member outliers. 
 #Ensure the variable types are correct.
 Data$Total.Food.Expenditure <- as.numeric(Data$Total.Food.Expenditure)
 Data$Household.Head.Age <- as.numeric(Data$Household.Head.Age)
-Data$Total.Number.of.Family.members <- as.numeric(Data$Total.Number.of.Family.members)e
+Data$Total.Number.of.Family.members <- as.numeric(Data$Total.Number.of.Family.members)
 Data$Type.of.Household <- as.factor(Data$Type.of.Household)
 ```
 
@@ -187,18 +187,35 @@ summary(gamma_model)
 # GLM Regression Analysis Results
 
 ```{r}
-# Compare the AIC of Poisson and negative binomial models and gamma models
-AIC(poisson_model, nb_model, gamma_model)
+# Compare the AIC of Possion and negative binomial models and gamma models
+AIC<-AIC(possion_model, nb_model, gamma_model)
+AIC
+
+#Compare Possion with negative binomial models
+lmtest::lrtest(possion_model, nb_model)
 
 # Coefficient to explain negative binomial regression (incidence ratio IRR)
 exp(coef(nb_model))
 
 #check Overdispersion
-cat("Overdispersion =", poisson_model$deviance / poisson_model$df.residual)
-
-plot(poisson_model, which = 1)  # Residual vs fit value
-qqnorm(resid(poisson_model))    # Normality test
+cat("Overdispersion =", possion_model$deviance / possion_model$df.residual)
 
 # Check collinearity (high collinearity results in unstable coefficients)
-vif(poisson_model) 
+vif(possion_model)
+
+plot(nb_model, which = 1)  # Residual vs fit value
+
 ```
+By comparing the AIC values of the three models,it can be seen that model Gamma has the lowest AIC value.It shows that the gamma model fits the data better.But the dependent variable 'the Total Number of Family' is a count data not suitable for gamma model Although it has a lower AIC number. 
+So we back to Poisson and negative binomial models. For the AIC value of the possion model is lower and after compared with the two models p valve(0.9075) is not lower than 0.05 so we should not change the possion model into negative binomial model.
+Fot the possion model its Overdispersion = 0.7947643 close to 1 that shows the data not Significant overdispersion.The IRR part shows IRR(Total.Food.Expenditure)=1.0000033 effect can be ignored,IRR(Household.Head.Age)=0.991 weakly negative effect,IRR(Type.of.Household_Single Family)= 0.706,IRR(Two or More Nonrelated Persons)= 0.542 the type of family is the key factor affecting the number of family members, and the reduction effect of multiple non-relatives is the most significant.
+The GVIF values of all variables are close to 1, and the adjusted values are all < 1.04, indicating that there is no multicollinearity problem and the model coefficients are reliable.
+
+
+
+
+
+
+
+
+
