@@ -6,7 +6,7 @@ format:
     output-file: "Group_02_Analysis"
     output-ext: "pdf"
 execute:
-  echo: true
+  echo: false
   eval: true
   warning: false
   message: false
@@ -229,6 +229,30 @@ summary(poisson_model)
 ```
 It can be observed that the p-values improve to varying degrees. Therefore, we mainly focus on the first three models.
 
+#Check the Gamma model
+```{r}
+# Use quantile for container division to avoid failure of equal width container division
+pred_values <- predict(gamma_model, type = "response")
+df_binned <- Data %>%
+  mutate(
+    pred_bin = cut(
+      pred_values,
+      breaks = quantile(pred_values, probs = seq(0, 1, 0.1), na.rm = TRUE),
+      include.lowest = TRUE
+    )
+  ) %>%
+  group_by(pred_bin) %>%
+  summarise(
+    mean_y = mean(Total.Number.of.Family.members),
+    var_y = var(Total.Number.of.Family.members),
+    n = n()
+  )
+
+# Plot
+plot(df_binned$mean_y^2, df_binned$var_y, 
+     xlab = "Mean²", ylab = "Variance")
+abline(0, 1, col = "red")
+```
 # GLM Regression Analysis Results
 
 ```{r}
@@ -251,7 +275,10 @@ vif(poisson_model)
 plot(nb_model, which = 1)  # Residual vs fit value
 
 ```
-By comparing the AIC values of the three models,it can be seen that model Gamma has the lowest AIC value.It shows that the gamma model fits the data better.But the dependent variable 'the Total Number of Family' is a count data not suitable for gamma model Although it has a lower AIC number. 
+By comparing the AIC values of the three models,it can be seen that model Gamma has the lowest AIC value.Although the minimum AIC is the reference index, the matching between the data and the hypothesis of the model is the fundamental basis. Therefore, we tested the relationship between the mean value and the variance and found that the trend was not linearly positive and did not meet the core hypothesis of the gamma distribution, so we could not use gamma to fit.
+
 So we back to Poisson and negative binomial models. For the AIC value of the poisson model is lower and after compared with the two models p valve(0.9075) is not lower than 0.05 so we should not change the poisson model into negative binomial model.
-For the poisson model its Overdispersion = 0.7947643 close to 1 that shows the data not Significant overdispersion.The IRR part shows IRR(Total.Food.Expenditure)=1.0000033 effect can be ignored,IRR(Household.Head.Age)=0.991 weakly negative effect,IRR(Type.of.Household_Single Family)= 0.706,IRR(Two or More Nonrelated Persons)= 0.542 the type of family is the key factor affecting the number of family members, and the reduction effect of multiple non-relatives is the most significant.
+
+For the poisson model its Overdispersion = 0.7947643 close to 1 that shows the data not Significant overdispersion.The IRR part shows IRR (Total.Food.Expenditure)=1.0000033 effect can be ignored,IRR(Household.Head.Age)=0.991 weakly negative effect,IRR(Type.of.Household_Single Family)= 0.706,IRR(Two or More Nonrelated Persons)= 0.542 the type of family is the key factor affecting the number of family members, and the reduction effect of multiple non-relatives is the most significant.
+
 The GVIF values of all variables are close to 1, and the adjusted values are all < 1.04, indicating that there is no multicollinearity problem and the model coefficients are reliable.
