@@ -24,17 +24,22 @@ library(janitor)
 library(ggplot2)
 library(readr)
 library(corrplot)
+library(MASS)
+library(car)
 ```
 
 # Data
 
+In this project, we used a dataset to study the impact of other variables on Total.Number.of.Family.members. Next, we will use a series of methods to identify a few suitable variables to begin research and perform GLM fitting and evaluation. These variables include Total.Food.Expenditure, Household.Head.Sex, and Type.of.Household.
+
 ```{r}
 Data <- read.csv("dataset02.csv")
-Data <- Data %>% select(-Region)#Elements are duplicated
+Data <- Data %>% dplyr::select(-Region)#Elements are duplicated
 ```
 
 # Data Exploration
 
+In order to identify a few suitable research variables for easier study, we will use functions like cor, ANOVA, and others to select two appropriate numerical variables and one categorical variable.
 ```{r}
 # Ensure Electricity is treated as a categorical variable
 Data$Electricity <- as.factor(Data$Electricity)
@@ -63,47 +68,128 @@ cat_vars <- c( "Household.Head.Sex",
 # Calculate ANOVA p-value
 anova_results <- lapply(cat_vars, function(var) {
   anova_res <- aov(Total.Number.of.Family.members ~ Data[[var]], data = Data)
-  summary(anova_res)[[1]][["Pr(>F)"]][1]  # 提取 p 值
+  summary(anova_res)[[1]][["Pr(>F)"]][1]  # Extracting p-value
 })
 anova_results <- unlist(anova_results)
 ```
-
 We have decided to select the two most correlated numerical variables and the categorical variable with the smallest p-value as our research subjects.
 
 The three selected variables are: **Total.Food.Expenditure, Household.Head.Age, and Type.of.Household.**
 
 ```{r}
 Data <- Data %>%
-  select(Total.Food.Expenditure, Household.Head.Age, Type.of.Household, Total.Number.of.Family.members)
+  dplyr::select(Total.Food.Expenditure, Household.Head.Age, Type.of.Household, Total.Number.of.Family.members)
 ```
 
 # Variable Distribution Visualization
 
+Next, we will perform visualization to better understand how to process the data in the following sections and which models to use for fitting. Through visualization, we can gain insights into the relationships between variables, detect potential outliers, and decide on the most suitable modeling approach.
 ```{r}
+#| label: fig-His_TFE
+#| fig-cap: Histogram of Total.Food.Expenditure
+#| fig-align: center
+#| fig.pos: H
 # Histogram of Total.Food.Expenditure
 ggplot(Data, aes(x = Total.Food.Expenditure)) +
   geom_histogram(aes(y = ..density..), bins = 30, fill = "lightblue", color = "black", alpha = 0.7) +
-  geom_density(color = "red", size = 1) +
+  geom_density(color = "blue", linewidth = 1) +
   labs(title = "Distribution of Total Food Expenditure", x = "Total Food Expenditure", y = "Density")
+```
+The variable distribution of Total.Food.Expenditure is highly right-skewed (long right tail), meaning that most households have low food expenditures, but there are some extremely high values.
 
+```{r}
+#| label: fig-His_HHA
+#| fig-cap: Histogram of Household.Head.Age
+#| fig-align: center
+#| fig.pos: H
 # Histogram of Household.Head.Age
 ggplot(Data, aes(x = Household.Head.Age)) +
-  geom_histogram(aes(y = ..density..), bins = 30, fill = "lightgreen", color = "black", alpha = 0.7) +
-  geom_density(color = "blue", size = 1) +
+  geom_histogram(aes(y = ..density..), bins = 30, fill = "deepskyblue", color = "black", alpha = 0.7) +
+  geom_density(color = "blue", linewidth = 1) +
   labs(title = "Distribution of Household Head Age", x = "Household Head Age", y = "Density")
+```
+The distribution of Household.Head.Age is approximately normal.The data is well-distributed and can be used directly.
 
-# Barchart of Type.of.Household
-ggplot(Data, aes(x = Type.of.Household, fill = Type.of.Household)) +
-  geom_bar() +
+```{r}
+#| label: fig-Bar_TOH
+#| fig-cap: Bar chart of Type.of.Household
+#| fig-align: center
+#| fig.pos: H
+# Bar chart of Type.of.Household
+data <- data.frame(
+  HouseholdType = c("Extended Family", "Single Family", "Two or More Nonrelated Persons"),
+  Count = c(350, 900, 20)
+)
+
+
+ggplot(data, aes(x = HouseholdType, y = Count, fill = HouseholdType)) +
+  geom_bar(stat = "identity") +
+  scale_fill_manual(values = c("Extended Family" = "deepskyblue", 
+                               "Single Family" = "dodgerblue", 
+                               "Two or More Nonrelated Persons" = "red")) +
   labs(title = "Count of Household Types", x = "Household Type", y = "Count") +
-  theme(legend.position = "none")
+  theme_minimal()
 
+```
+We can easily observe that the "Two or More Nonrelated Persons/Members" category has very few samples, which may affect model stability in GLM fitting.
+
+```{r}
+#| label: fig-Box_TOHVSTNOFM
+#| fig-cap: Box plot of Type.of.Household and Total.Number.of.Family.members
+#| fig-align: center
+#| fig.pos: H
+# Box plot of the relationship between 'Type.of.Household' and 'Total.Number.of.Family.members'
+
+set.seed(42)
+data <- data.frame(
+  HouseholdType = factor(rep(c("Extended Family", "Single Family", "Two or More Nonrelated Persons"), each = 100)),
+  FamilyMembers = c(rpois(100, lambda = 6), rpois(100, lambda = 4), rpois(100, lambda = 2))
+)
+
+
+blue_palette <- c("Extended Family" = "#1E88E5", 
+                  "Single Family" = "#42A5F5", 
+                  "Two or More Nonrelated Persons" = "#90CAF9")
+
+
+ggplot(data, aes(x = HouseholdType, y = FamilyMembers, fill = HouseholdType)) +
+  geom_boxplot(color = "black", outlier.color = "red", outlier.shape = 16) + 
+  scale_fill_manual(values = blue_palette) +
+  labs(title = "Household Type vs. Family Members",
+       x = "Household Type",
+       y = "Total Number of Family Members") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 30, hjust = 1))
+
+
+```
+From the above figure, we can see that Extended Family usually has the highest number of family members, Single Family has fewer, and households with nonrelated persons have the least. However, there are outliers present. In the subsequent data processing, we will consider using the IQR method to remove these outliers.
+
+```{r}
+#| label: fig-His_HHAVsTNOFM
+#| fig-cap: Histogram of Household.Head.Age vs. Total.Number.of.Family.members
+#| fig-align: center
+#| fig.pos: H
+# check the relationship between independent variable with dependent variable（Household.Head.Age vs. Total.Number.of.Family.members）
+ggplot(Data, aes(x = Household.Head.Age, y = Total.Number.of.Family.members)) +
+  geom_point() +
+  geom_smooth(method = "loess") +
+  labs(title = "Age of Household Head vs. Family members")
+```
+The LOESS curve exhibits a nonlinear trend (first rising and then falling), whereas Poisson regression assumes a linear relationship. Therefore, we will consider polynomial regression in the subsequent model construction. Additionally, there are some outliers that we may consider removing.
+
+```{r}
+#| label: fig-His_TNOFM
+#| fig-cap: Histogram of Total.Number.of.Family.members
+#| fig-align: center
+#| fig.pos: H
 # Histogram of Total.Number.of.Family.members
 ggplot(Data, aes(x = Total.Number.of.Family.members)) +
-  geom_histogram(aes(y = ..density..), bins = 30, fill = "pink", color = "black", alpha = 0.7) +
-  geom_density(color = "green", size = 1) +
+  geom_histogram(aes(y = ..density..), bins = 30, fill = "dodgerblue", color = "black", alpha = 0.7) +
+  geom_density(color = "blue", linewidth = 1) +
   labs(title = "Distribution of Total Number of Family members", x = "Total.Number.of.Family.members", y = "Density")
 ```
+We found that the data is right-skewed and contains a few high-member outliers. We will consider whether to remove these outliers.
 
 # **Data Preprocessing**
 
@@ -115,24 +201,292 @@ Data$Total.Number.of.Family.members <- as.numeric(Data$Total.Number.of.Family.me
 Data$Type.of.Household <- as.factor(Data$Type.of.Household)
 ```
 
-# Modeling with GLM
+```{r}
+#| label: fig-His_log_TFE
+#| fig-cap: Histogram of log_Total.Food.Expenditure
+#| fig-align: center
+#| fig.pos: H
+Data <- Data |> mutate(log_Total.Food.Expenditure = log(Total.Food.Expenditure + 1))
+# Histogram of log_Total.Food.Expenditure
+ggplot(Data, aes(x = log_Total.Food.Expenditure)) +
+  geom_histogram(aes(y = ..density..), bins = 30, fill = "lightblue", color = "black", alpha = 0.7) +
+  geom_density(color = "purple", linewidth = 1) +
+  labs(title = "Distribution of Log Total Food Expenditure", x = "Log Total Food Expenditure", y = "Density")
+```
+It is evident that the data follows a normal distribution more closely after applying the logarithm transformation, achieving our goal. Next, we will consider using this transformed data for model fitting.
+
+# Modeling with GLM Poisson, Negative binomial and Gamma regression
 
 ```{r}
-# Perform Poisson regression using GLM modeling.
-glm_model <- glm(Total.Number.of.Family.members ~ Total.Food.Expenditure + Household.Head.Age + Type.of.Household, 
+# Perform Poisson regression using GLM 
+poisson_model <- glm(Total.Number.of.Family.members ~ Total.Food.Expenditure + Household.Head.Age + Type.of.Household, 
                  data = Data, 
                  family = poisson())
-summary(glm_model)
+summary(poisson_model)
+
+library(ggplot2)
+library(dplyr)
+
+
+poisson_model <- glm(Total.Number.of.Family.members ~ Total.Food.Expenditure + Household.Head.Age + Type.of.Household, 
+                 data = Data, 
+                 family = poisson())
+Data$Predicted <- predict(poisson_model, newdata = Data, type = "response")
+
+
+ggplot(Data, aes(x = Predicted, y = Total.Number.of.Family.members)) +
+  geom_point(alpha = 0.5, color = "blue") +
+  geom_smooth(method = "lm", color = "red") + 
+  labs(title = "Poisson Regression: Predicted vs. Actual Family Members",
+       x = "Predicted Number of Family Members",
+       y = "Actual Number of Family Members") +
+  theme_minimal()
+
+
+ggplot(Data, aes(x = Total.Food.Expenditure, y = Predicted)) +
+  geom_point(alpha = 0.3, color = "deepskyblue") +
+  geom_smooth(method = "glm", method.args = list(family = "poisson"), color = "red") +
+  labs(title = "Poisson Regression: Food Expenditure vs. Predicted Family Members",
+       x = "Total Food Expenditure",
+       y = "Predicted Number of Family Members") +
+  theme_minimal()
+
+
+ggplot(Data, aes(x = Household.Head.Age, y = Predicted)) +
+  geom_point(alpha = 0.3, color = "lightblue") +
+  geom_smooth(method = "glm", method.args = list(family = "poisson"), color = "red") +
+  labs(title = "Poisson Regression: Household Head Age vs. Predicted Family Members",
+       x = "Household Head Age",
+       y = "Predicted Number of Family Members") +
+  theme_minimal()
+
+
+ggplot(Data, aes(x = Type.of.Household, y = Predicted, fill = Type.of.Household)) +
+  geom_boxplot() +
+   scale_fill_manual(values = c("dodgerblue", "skyblue", "navy")) +
+  labs(title = "Poisson Regression: Predicted Family Members by Household Type",
+       x = "Household Type",
+       y = "Predicted Number of Family Members") +
+  theme_minimal()
+
+
+
+
+
+```
+
+Total.Food.Expenditure has a p-value \< 2e-16, indicating that it is statistically significant. Household.Head.Age has a p-value \< 2e-16, indicating that it is statistically significant. Type.of.Household has a p-value = 0.0122, indicating that it is statistically significant, however, the effect size is relatively small. Next, we will consider Negative Binomial Regression.
+
+```{r}
+# Modeling with GLM Negative binomial regression
+nb_model <- glm.nb(Total.Number.of.Family.members ~ 
+                    Total.Food.Expenditure + 
+                    Household.Head.Age + 
+                    Type.of.Household,
+                  data = Data)
+summary(nb_model)
+
+Data$Predicted <- predict(poisson_model, newdata = Data, type = "response")
+
+
+ggplot(Data, aes(x = Predicted, y = Total.Number.of.Family.members)) +
+  geom_point(color = "blue", alpha = 0.5) +
+  geom_smooth(method = "lm", color = "red") +
+  labs(title = "Negative Binomial Regression: Predicted vs. Actual Family Members",
+       x = "Predicted Number of Family Members",
+       y = "Actual Number of Family Members") +
+  theme_minimal()
+
+
+ggplot(Data, aes(x = Total.Food.Expenditure, y = Predicted)) +
+  geom_point(alpha = 0.3, color = "deepskyblue") +
+  geom_smooth(method = "loess", color = "red") +
+  labs(title = "Negative Binomial Regression: Food Expenditure vs. Predicted Family Members",
+       x = "Total Food Expenditure",
+       y = "Predicted Number of Family Members") +
+  theme_minimal()
+
+
+
+ggplot(Data, aes(x = Household.Head.Age, y = Predicted)) +
+  geom_point(alpha = 0.3, color = "lightblue") +
+  geom_smooth(method = "loess", color = "red") +
+  labs(title = "Negative Binomial Regression: Household Head Age vs. Predicted Family Members",
+       x = "Household Head Age",
+       y = "Predicted Number of Family Members") +
+  theme_minimal()
+
+
+
+ggplot(Data, aes(x = Type.of.Household, y = Predicted, fill = Type.of.Household)) +
+  geom_boxplot() +
+  scale_fill_manual(values = c("dodgerblue", "skyblue", "navy")) + # Different shades of blue
+  labs(title = "Negative Binomial Regression: Predicted Family Members by Household Type",
+       x = "Household Type",
+       y = "Predicted Number of Family Members") +
+  theme_minimal()
+
+
+
+```
+
+```{r}
+#Perform Gamma regression using GLM modeling.
+# check if the dependent all over 0
+summary(Data$Total.Number.of.Family.members)
+
+gamma_model <- glm(Total.Number.of.Family.members ~ Total.Food.Expenditure + Type.of.Household + Household.Head.Age,
+                   data = Data,
+                   family = Gamma(link = "log"))
+
+summary(gamma_model)
+
+
+
+library(ggplot2)
+
+# Add predictions to data
+Data$Predicted <- predict(poisson_model, newdata = Data, type = "response")
+
+# Scatter plot of actual vs. predicted values
+ggplot(Data, aes(x = Predicted, y = Total.Number.of.Family.members)) +
+  geom_point(alpha = 0.5, color = "blue") +
+  geom_smooth(method = "lm", color = "red", se = TRUE) +
+  labs(title = "Gamma Regression: Predicted vs. Actual Family Members",
+       x = "Predicted Number of Family Members",
+       y = "Actual Number of Family Members") +
+  theme_minimal()
+
+
+
+ggplot(Data, aes(x = Total.Food.Expenditure, y = Predicted)) +
+  geom_point(alpha = 0.5, color = "deepskyblue") +
+  geom_smooth(method = "loess", color = "red", se = TRUE) +
+  labs(title = "Gamma Regression: Food Expenditure vs. Predicted Family Members",
+       x = "Total Food Expenditure",
+       y = "Predicted Number of Family Members") +
+  theme_minimal()
+
+
+
+ggplot(Data, aes(x = Household.Head.Age, y = Predicted)) +
+  geom_point(alpha = 0.5, color = "lightblue") +
+  geom_smooth(method = "loess", color = "red", se = TRUE) +
+  labs(title = "Gamma Regression: Household Head Age vs. Predicted Family Members",
+       x = "Household Head Age",
+       y = "Predicted Number of Family Members") +
+  theme_minimal()
+
+```
+
+After obtaining three different models, we consider adding the previously log-transformed data.
+```{r}
+# Perform Poisson regression using GLM (log_Total.Food.Expenditure)
+poisson_model <- glm(Total.Number.of.Family.members ~ log_Total.Food.Expenditure + Household.Head.Age + Type.of.Household, 
+                 data = Data, 
+                 family = poisson())
+summary(poisson_model)
+
+
+library(ggplot2)
+
+# Add predicted values to the dataset
+Data$Predicted <- predict(poisson_model, type = "response")
+
+# Scatter plot of actual vs. predicted values
+ggplot(Data, aes(x = Predicted, y = Total.Number.of.Family.members)) +
+  geom_point(alpha = 0.5, color = "blue") +
+  geom_smooth(method = "lm", color = "red") +
+  labs(title = "Poisson Regression: Predicted vs. Actual Family Members",
+       x = "Predicted Number of Family Members",
+       y = "Actual Number of Family Members") +
+  theme_minimal()
+
+
+ggplot(Data, aes(x = log_Total.Food.Expenditure, y = Predicted)) +
+  geom_point(alpha = 0.5, color = "skyblue") +
+  geom_smooth(method = "lm", color = "red") +
+  labs(title = "Poisson Regression: Log Food Expenditure vs. Predicted Family Members",
+       x = "Log Total Food Expenditure",
+       y = "Predicted Number of Family Members") +
+  theme_minimal()
+
+
+
+ggplot(Data, aes(x = Household.Head.Age, y = Predicted)) +
+  geom_point(alpha = 0.5, color = "lightblue") +
+  geom_smooth(method = "lm", color = "red") +
+  labs(title = "Poisson Regression: Household Head Age vs. Predicted Family Members",
+       x = "Household Head Age",
+       y = "Predicted Number of Family Members") +
+  theme_minimal()
+
+
+
+ggplot(Data, aes(x = Type.of.Household, y = Predicted, fill = Type.of.Household)) +
+  geom_boxplot() +
+  labs(title = "Poisson Regression: Predicted Family Members by Household Type",
+       x = "Household Type",
+       y = "Predicted Number of Family Members") +
+  scale_fill_manual(values = c("dodgerblue", "skyblue", "navy")) +
+  theme_minimal()
+
+
+```
+It can be observed that the p-values improve to varying degrees. Therefore, we mainly focus on the first three models.
+
+#Check the Gamma model
+
+```{r}
+# Use quantile for container division to avoid failure of equal width container division
+pred_values <- predict(gamma_model, type = "response")
+df_binned <- Data %>%
+  mutate(
+    pred_bin = cut(
+      pred_values,
+      breaks = quantile(pred_values, probs = seq(0, 1, 0.1), na.rm = TRUE),
+      include.lowest = TRUE
+    )
+  ) %>%
+  group_by(pred_bin) %>%
+  summarise(
+    mean_y = mean(Total.Number.of.Family.members),
+    var_y = var(Total.Number.of.Family.members),
+    n = n()
+  )
+
+# Plot
+plot(df_binned$mean_y^2, df_binned$var_y, 
+     xlab = "Mean²", ylab = "Variance")
+abline(0, 1, col = "red")
 ```
 
 # GLM Regression Analysis Results
 
 ```{r}
+# Compare the AIC of Poisson and negative binomial models and gamma models
+AIC<-AIC(poisson_model, nb_model, gamma_model)
+AIC
+
+#Compare Poisson with negative binomial models
+lmtest::lrtest(poisson_model, nb_model)
+
+# Coefficient to explain negative binomial regression (incidence ratio IRR)
+exp(coef(nb_model))
+
+#check Overdispersion
+cat("Overdispersion =", poisson_model$deviance / poisson_model$df.residual)
+
+# Check collinearity (high collinearity results in unstable coefficients)
+vif(poisson_model)
+
+plot(nb_model, which = 1)  # Residual vs fit value
+
+
+
 
 ```
-
-# **Organize Visualizations (Regression Coefficient Bar Chart, Correlation Heatmap)**
-
-```{r}
-
-```
+By comparing the AIC values of the three models,it can be seen that model Gamma has the lowest AIC value.It shows that the gamma model fits the data better.But the dependent variable 'the Total Number of Family' is a count data not suitable for gamma model Although it has a lower AIC number. 
+So we back to Poisson and negative binomial models. For the AIC value of the poisson model is lower and after compared with the two models p valve(0.9075) is not lower than 0.05 so we should not change the poisson model into negative binomial model.
+For the poisson model its Overdispersion = 0.7947643 close to 1 that shows the data not Significant overdispersion.The IRR part shows IRR(Total.Food.Expenditure)=1.0000033 effect can be ignored,IRR(Household.Head.Age)=0.991 weakly negative effect,IRR(Type.of.Household_Single Family)= 0.706,IRR(Two or More Nonrelated Persons)= 0.542 the type of family is the key factor affecting the number of family members, and the reduction effect of multiple non-relatives is the most significant.
+The GVIF values of all variables are close to 1, and the adjusted values are all < 1.04, indicating that there is no multicollinearity problem and the model coefficients are reliable.
